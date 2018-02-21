@@ -1,0 +1,287 @@
+heat_template_version: 2013-05-23
+
+description: >
+  Created 10/25/17 by admin. For Cloud admin@Amazon
+
+parameters:
+  flavor:
+    type: string
+    description: 'Flavor to be used for compute instance'
+  key_name:
+    type: string
+    description: 'For most clouds, the name of the key-pair to be used for the compute instance; for VMware clouds, the contents of the public SSH key for the compute instance'
+  availability_zone1:
+    type: string
+    description: 'Name of availability zone in which to create the instance'
+    default: 'nova'
+  network-id__for__vpc-cf3dafa9:
+    type: string
+    description: 'Generated to reference ''vpc-cf3dafa9'' network.'
+    default: 'vpc-cf3dafa9'
+  subnet_id_subnet-11b2fa3c:
+    type: string
+    description: 'Generated to reference subnet ''subnet-11b2fa3c''.'
+    default: 'subnet-11b2fa3c'
+  ucd_server_url:
+    type: string
+    description: 'The server URL for agent communication to UrbanCode Deploy. Do *not* add a trailing slash.'
+    default: 'https://glamdring.local:8443'
+  ucd_user:
+    type: string
+    description: 'The user credential for the UrbanCode Deploy server.'
+    default: 'PasswordIsAuthToken'
+  ucd_password:
+    type: string
+    description: 'The user credential for the UrbanCode Deploy server.'
+    hidden: true
+  ucd_relay_url:
+    type: string
+    description: 'The server URL for an agent relay - leave as ''None'' to enable agents to communicate with server directly.'
+    default: 'None'
+  availability_zone:
+    type: string
+    description: 'Name of the availability zone in which to create the instance'
+  vpc_security_group_ids:
+    type: string
+    description: 'Generated'
+    label: Vpc Security Group Ids
+    default: 'sg-05b62679'
+  db_master_username:
+    type: string
+    description: 'Generated'
+    label: Db Master Username
+    default: 'admin'
+  db_master_password:
+    type: string
+    description: 'Generated'
+    label: Db Master Password
+    default: 'password'
+    hidden: true
+  db_user:
+    type: string
+    description: 'Generated'
+    label: Db User
+    default: 'jke_user'
+  db_password:
+    type: string
+    description: 'Generated'
+    label: Db Password
+    default: 'password'
+    hidden: true
+  db_name:
+    type: string
+    description: 'Generated'
+    label: Db Name
+    default: 'JKEDB'
+parameter_groups:
+    - { label: 'Agent Parameters', parameters: [ucd_password, ucd_relay_url, ucd_server_url, ucd_user] }
+    - { label: 'Database Parameters', parameters: [db_master_password, db_master_username, db_name, db_password, db_user] }
+    - { label: 'Image Parameters', parameters: [flavor, key_name] }
+    - { label: 'Network Parameters', parameters: [availability_zone1, network-id__for__vpc-cf3dafa9, subnet_id_subnet-11b2fa3c, vpc_security_group_ids] }
+resources:
+## REFERENCE {"vpc-cf3dafa9":{"type": "OS::Neutron::Net", "properties": {"network_id": "vpc-cf3dafa9", "external":"false", "subnets": [{"cidr":"172.31.48.0\/20","availability_zone":"us-east-1b","name":"subnet-11b2fa3c","id":"subnet-11b2fa3c"},{"cidr":"172.31.16.0\/20","availability_zone":"us-east-1d","name":"subnet-7066202b","id":"subnet-7066202b"},{"cidr":"172.31.0.0\/20","availability_zone":"us-east-1c","name":"subnet-6cd5ec25","id":"subnet-6cd5ec25"},{"cidr":"172.31.80.0\/20","availability_zone":"us-east-1f","name":"subnet-b40e61b8","id":"subnet-b40e61b8"},{"cidr":"172.31.32.0\/20","availability_zone":"us-east-1e","name":"subnet-2072fd1c","id":"subnet-2072fd1c"},{"cidr":"172.31.64.0\/20","availability_zone":"us-east-1a","name":"subnet-ea770e8f","id":"subnet-ea770e8f"}] }}}
+
+  jke-dbclient-development:
+    type: OS::Nova::Server
+    properties:
+      user_data: { get_resource: jke-dbclient-development_mime }
+      user_data_format: RAW
+      networks:
+          - port: { get_resource: jke-dbclient-development__to__vpc-cf3dafa9__port }
+      name: jke-client-development
+      image: "ami-1a0a540d" # RHEL-6.8_HVM-20161026-x86_64-1-Hourly2-GP2
+      flavor: { get_param: flavor }
+      key_name: { get_param: key_name }
+      availability_zone: { get_param: availability_zone1 }
+      metadata: 
+        "__os_type__" : "Linux"
+
+
+  MySQL_Client:
+    type: IBM::UrbanCode::SoftwareDeploy::UCD
+    properties:
+      apply_config: { get_resource: MySQL_Client_sw_config }
+      server: jke-dbclient-development
+      version: LATEST
+      agent_timeout: '750'
+
+  MySQL_Client_sw_config:
+    type: IBM::UrbanCode::SoftwareConfig::UCD
+    properties: 
+      name: "MySQL Client"
+      component_process: "install-mysql-client-rhel"
+      component_process_timeout: "300"
+      ucd_server_url: { get_param: ucd_server_url } # these should come from resource_tree
+      ucd_username: { get_param: ucd_user }
+      ucd_password: { get_param: ucd_password }
+      application: { get_attr: [resource_tree, application_name] }
+      environment_name: { get_attr: [resource_tree, environment_name] }
+
+  jke_db:
+    depends_on: [MySQL_Client, WebSphere_Liberty_Profile]
+    type: IBM::UrbanCode::SoftwareDeploy::UCD
+    properties:
+      apply_config: { get_resource: jke_db_sw_config }
+      server: jke-dbclient-development
+      version: LATEST
+      agent_timeout: "360"
+
+  jke_db_sw_config:
+    type: IBM::UrbanCode::SoftwareConfig::UCD
+    properties: 
+      name: "jke.db"
+      component_process: deploy_rds
+      component_process_timeout: "300"
+      ucd_server_url: { get_param: ucd_server_url } # these should come from resource_tree
+      ucd_username: { get_param: ucd_user }
+      ucd_password: { get_param: ucd_password }
+      application: { get_attr: [resource_tree, application_name] }
+      environment_name: { get_attr: [resource_tree, environment_name] }
+      inputs:     # component's environment property definitions
+        db_admin_password: { get_param: db_master_password }  # Generated
+        db_admin_user: { get_param: db_master_username }  # Generated
+        db_endpoint_address: {get_attr: [rds-dev-database, endpoint_address]}
+        db_port: {get_attr: [rds-dev-database, endpoint_port]}
+        db_name: { get_param: db_name }
+        db_password: { get_param: db_password }
+        db_user: { get_param: db_user }
+
+  jke_war:
+    depends_on: jke_db
+    type: IBM::UrbanCode::SoftwareDeploy::UCD
+    properties:
+      apply_config: { get_resource: jke_war_sw_config }
+      server: jke-dbclient-development
+      version: LATEST
+      agent_timeout: "360"
+
+  jke_war_sw_config:
+    type: IBM::UrbanCode::SoftwareConfig::UCD
+    properties: 
+      name: "jke.war"
+      component_process: deploy_rds
+      component_process_timeout: "300"
+      ucd_server_url: { get_param: ucd_server_url } # these should come from resource_tree
+      ucd_username: { get_param: ucd_user }
+      ucd_password: { get_param: ucd_password }
+      application: { get_attr: [resource_tree, application_name] }
+      environment_name: { get_attr: [resource_tree, environment_name] }
+      inputs:     # component's environment property definitions
+        JKE_DB_PORT : {get_attr: [rds-dev-database, endpoint_port]}
+        JKE_DB_HOST : {get_attr: [rds-dev-database, endpoint_address]}
+
+  jke-dbclient-development_mime:
+    type: OS::Heat::MultipartMime
+    properties:
+      parts:
+        - config: { get_resource: ucd_agent_install_linux }
+          subtype: "x-shellscript"
+
+  WebSphere_Liberty_Profile:
+    type: IBM::UrbanCode::SoftwareDeploy::UCD
+    properties:
+      apply_config: { get_resource: WebSphere_Liberty_Profile_sw_config }
+      server: jke-dbclient-development
+      version: LATEST
+      agent_timeout: '750'
+
+  rds-dev-database:
+    type: IBM::RDS::Instance
+    properties:
+      name: rds-dev-database
+      db_instance_class: db.t2.micro
+      engine: mysql
+      engine_version: 5.6.37
+      availability_zone: { get_param: availability_zone }
+      vpc_security_group_ids: [ sg-05b62679 ]
+      allocated_storage: 5
+      master_username: { get_param: db_master_username }
+      master_password: { get_param: db_master_password }
+      subnet_group:
+      parameter_group:
+
+  WebSphere_Liberty_Profile_sw_config:
+    type: IBM::UrbanCode::SoftwareConfig::UCD
+    properties: 
+      name: "WebSphere Liberty Profile"
+      component_process: "deploy"
+      component_process_timeout: "300"
+      ucd_server_url: { get_param: ucd_server_url } # these should come from resource_tree
+      ucd_username: { get_param: ucd_user }
+      ucd_password: { get_param: ucd_password }
+      application: { get_attr: [resource_tree, application_name] }
+      environment_name: { get_attr: [resource_tree, environment_name] }
+
+  jke-dbclient-development__to__vpc-cf3dafa9__port:
+    type: OS::Neutron::Port
+    properties:
+      security_groups:
+          - sg-05b62679
+          - sg-8695b3f9  # sg-05b62679(default)  sg-8695b3f9(launch-wizard-4)  
+      network_id: { get_param: network-id__for__vpc-cf3dafa9 }
+      replacement_policy: AUTO   #TODO remove this if using HEAT version Icehouse!
+      fixed_ips:
+        - subnet: { get_param: subnet_id_subnet-11b2fa3c }
+
+  resource_tree:
+    type: IBM::UrbanCode::ResourceTree
+    properties:
+       urbancode_deploy_url: { get_param: ucd_server_url }
+       username: { get_param: ucd_user }
+       password: { get_param: ucd_password }
+       team_mappings: 
+       application: JKE
+       base_resource_group: 
+
+  ucd_agent_install_linux:
+    type: OS::Heat::SoftwareConfig
+    properties:
+      config:
+        str_replace:
+          template: |
+            #!/usr/bin/env bash
+            #ifconfig eth0 mtu 1454 ## Optionally patch the MTU
+            export PATH=$PATH:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/root/bin
+            arch=`uname -ms | awk '{print tolower($0)}' | tr " " "-" `
+            agent_archive=ibm-ucd-agent-$arch.tgz
+            if [ "_ucd_relay_url_" != "None" ]; then
+              proxy_args="--proxy _ucd_relay_url_:20080"
+              ucd_remote_host=_ucd_relay_url_
+              agent_args="-r -d"
+              ucd_jms_port=7916
+            else
+              proxy_args=
+              agent_args=
+              ucd_remote_host=_ucd_server_url_
+              ucd_jms_port=7918
+            fi
+            if ps -ef | grep -v grep | grep -q air-monitor.jar ; then
+              exit 0
+            elif [ -d /opt/ibm ]; then
+              exit 0
+            fi 
+            if command -V apt-get && ! command -V curl; then apt-get -y install curl; fi
+            if command -V yum && ! command -V curl; then yum -y install curl; fi
+            curl $proxy_args -Lk --retry 10 --retry-delay 10 --retry-max-time 120 -o /tmp/$agent_archive -u _ucd_user_:_ucd_password_ "_ucd_server_url_/cli/version/downloadArtifacts?component=ucd-agent-$arch&version=_agent_version_&singleFilePath=$agent_archive"
+            tar xfz /tmp/$agent_archive -C /tmp
+            /tmp/ibm-ucd-agent-install/install-agent-with-options.sh -t "_agent_team_" -p $ucd_jms_port -s $ucd_remote_host $agent_args -x start -v -n _agent_name_
+          params:
+            _agent_name_:
+               str_replace:
+                  template: |
+                    "_application_name_._environment_name_"
+                  params:
+                    _application_name_: { get_attr: [resource_tree, application_name ] }
+                    _environment_name_: { get_param: "OS::stack_name" }
+            _ucd_server_url_: { get_param: ucd_server_url }
+            _ucd_relay_url_: { get_param: ucd_relay_url }
+            _ucd_user_ : { get_param: ucd_user }
+            _ucd_password_ : { get_param: ucd_password }
+            _agent_version_ : 7.1
+            _agent_team_ : ""
+
+outputs:
+  blueprint_url:
+    description: Blueprint Origin URL
+    value:  https://lorien.local:8443/landscaper/view/projects?open=admin_d033ba0f_9d80_4201_807b_7203e0594bff-OrionContent/JKE/JKE-RDS-Client-Development.yml
+

@@ -1,0 +1,41 @@
+# Configuration file template
+
+description: >
+  Created 6/6/17 by admin. For Cloud admin@Amazon
+
+resource_registry:
+  OS::Nova::Server : IBM::EC2::Server
+  OS::Cinder::Volume : IBM::EC2::Volume
+  OS::Cinder::VolumeAttachment : IBM::EC2::VolumeAttachment
+  OS::Neutron::Port : IBM::EC2::Port
+  OS::Neutron::Net : IBM::EC2::VPC
+  OS::Neutron::Subnet : IBM::EC2::Subnet
+  OS::Neutron::Router : IBM::EC2::RouteTable
+  OS::Neutron::RouterGateway : IBM::EC2::InternetGateway
+  OS::Neutron::RouterInterface : IBM::EC2::RouteTableAssociation
+  OS::Neutron::FloatingIP : IBM::EC2::EIP
+  OS::Neutron::FloatingIPAssociation : IBM::EC2::EIPAssociation
+  OS::Neutron::SecurityGroup : IBM::EC2::SecurityGroup
+  OS::Neutron::HealthMonitor : IBM::ElasticLoadBalancing::HealthCheck
+  OS::Neutron::LoadBalancer : IBM::ElasticLoadBalancing::LoadBalancer
+  OS::Neutron::Pool : IBM::ElasticLoadBalancing::Pool
+  OS::Neutron::PoolMember : IBM::ElasticLoadBalancing::PoolMember
+  OS::Heat::AutoScalingGroup : IBM::EC2::AutoScalingGroup
+  OS::Heat::ScalingPolicy : IBM::EC2::AutoScalingPolicy
+  OS::Ceilometer::Alarm : IBM::EC2::Alarm
+  OS::Swift::Container : IBM::S3::Bucket
+parameters:
+  rds-instance-name: "rds-prod-instance"
+  ucd_password: "61274e4e-8037-4235-b913-e8cfcacec208"
+  ucd_relay_url: "http://ec2-174-129-187-30.compute-1.amazonaws.com"
+  ucd_user: "PasswordIsAuthToken"
+  ucd_server_url: "https://glamdring.local:8443"
+  db_master_username: "admin"
+  db_master_password: "password"
+  availability_zone: "us-east-1b"
+  availability_zone2: "us-east-1b"
+  subnet_id_subnet-11b2fa3c: "subnet-11b2fa3c"
+  network-id__for__vpc-cf3dafa9: "vpc-cf3dafa9"
+  availability_zone1: "us-east-1b"
+  key_name: "aws_blueprint"
+  flavor: "t2.micro"
